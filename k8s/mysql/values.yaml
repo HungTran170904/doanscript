@@ -1,0 +1,73 @@
+image:
+  repository: "mysql"
+  tag: "8.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+
+initContainers: []
+
+podAnnotations:
+  secrets-store.csi.k8s.io/used: "true"
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+
+configmap:
+  enabled: false
+
+secret:
+  keyvaultName: "mysql-credentials"
+  keyvaultSecretKey: db-root-password
+  userAssignedIdentityID: 4954c6fa-60de-4dbc-bae1-4e51fa39aa7e
+  tenantId: "3a05eb6e-58c2-44f6-80f2-389d7854999b"
+
+env:
+  - name: MYSQL_DATABASE
+    value: dkhpdb
+
+pvc:
+  enabled: false
+  accessMode: ReadWriteOnce
+  storageClassName: standard
+  storage: 500Mi
+  pvName: mysql-pv
+  mountPath: /var/lib/mysql
+
+service:
+  type: ClusterIP
+  port: 3306
+  additionalPorts: []
+
+ingress:
+  enabled: false
+  # className: ""
+  # annotations: {}
+  #   # kubernetes.io/ingress.class: nginx
+  #   # kubernetes.io/tls-acme: "true"
+  # hosts:
+  #   - host: chart-example.local
+  #     paths:
+  #       - path: /
+  #         pathType: ImplementationSpecific
+  # tls: []
+
+resources: {}
+
+volumes: {}
+
+volumeMounts: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,114 @@
+# Default values for common.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: hungtran679/dkhp_demo-backend-service:latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+dbSecret:
+  keyvaultName: "mysql-credentials"
+  keyvaultSecretKey: db-root-password
+  userAssignedIdentityID: 4954c6fa-60de-4dbc-bae1-4e51fa39aa7e
+  tenantId: "3a05eb6e-58c2-44f6-80f2-389d7854999b"
+
+volumes: []
+volumeMounts: []
+
+env:
+  - name: DB_HOST
+    value: mysql.db.svc.cluster.local       
+  - name: DB_PORT
+    value: "3306"    
+  - name: DB_DATABASE
+    value: dkhpdb
+  - name: DB_USER
+    value: root
+  - name: DB_PASS
+    valueFrom:
+      secretKeyRef:
+        name: mysql-credentials
+        key: db-root-password
+
+pvc:
+  enabled: false
+
+job:
+  enabled: true
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+  imagePullSecrets: []
+  image: "hungtran679/dkhp-flyway:latest"
+  pullPolicy: IfNotPresent
+  env:
+    - name: DB_HOST
+      value: mysql.db.svc.cluster.local              
+    - name: DB_PORT
+      value: "3306"    
+    - name: DB_DATABASE
+      value: dkhpdb
+    - name: DB_USER
+      value: root
+    - name: DB_PASS
+      valueFrom:
+        secretKeyRef:
+          name: mysql-credentials
+          key: db-root-password
+  volumes:
+    - name: secrets-store-inline
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: backend-db-secret
+  volumeMounts:
+    - name: secrets-store-inline
+      mountPath: "/mnt/secrets-store"
+      readOnly: true
+  restartPolicy: OnFailure
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  hosts:
+    - paths:
+        - path: /api(/|$)(.*)
+          pathType: ImplementationSpecific
+  tls: []
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,19 @@
+{{- define "common.pvc" -}}
+{{- if .Values.pvc.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "common.name" . }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{.Values.pvc.accessMode}}
+  resources:
+    requests:
+      storage: {{.Values.pvc.storage}}
+  {{- if .Values.pvc.storageClassName }}
+  storageClassName: {{ .Values.pvc.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+{{- end}}
