@@ -16,7 +16,7 @@ rbac:
   create: true
   annotations: {}
   role:
-    resources: ["pods", "services"]
+    resources: ["pods", "services", "secrets"]
     verbs: ["*"]
     # verbs: ["get", "list", "watch"]
   rolebinding:

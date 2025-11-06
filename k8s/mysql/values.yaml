@@ -24,10 +24,20 @@ securityContext: {}
 configmap:
   enabled: false
 
+networkpolicy:
+  enabled: false
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: app
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: backend
+
 secret:
   keyvaultName: "mysql-credentials"
   keyvaultSecretKey: db-root-password
-  userAssignedIdentityID: 4954c6fa-60de-4dbc-bae1-4e51fa39aa7e
+  userAssignedIdentityID: 3428d63a-18cd-4491-98d4-688abcfcae1c
   tenantId: "3a05eb6e-58c2-44f6-80f2-389d7854999b"
 
 env:
