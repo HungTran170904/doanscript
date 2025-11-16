@@ -21,8 +21,9 @@ function CheckPodCreate {
             $resources = @($rule.resources) | Where-Object { $_ -ne $null }
             $verbs     = @($rule.verbs) | Where-Object { $_ -ne $null }
 
-            # Check wildcards
-            if ($apiGroups -contains "*" -or $resources -contains "*" -or $verbs -contains "*") {
+            # Check create pod permission
+            if (($resources -contains "*" -or $resources -contains "pods") -and 
+                    ($verbs -contains "*" -or $verbs -contains "create")) {
                 $hasPodCreate = $true
             }
         }
@@ -41,7 +42,7 @@ function CheckPodCreate {
 }
 
 # Function to remove secret access rules
-function RemoveSecretAccessRules {
+function RemovePodCreateRules {
     param (
         [object]$RolesJson,
         [string]$Type
@@ -57,7 +58,8 @@ function RemoveSecretAccessRules {
             $resources = @($rule.resources) | Where-Object { $_ -ne $null }
             $verbs     = @($rule.verbs) | Where-Object { $_ -ne $null }
 
-            $containsWildcard =  ($apiGroups -contains "*" -or $resources -contains "*" -or $verbs -contains "*")
+            $containsWildcard =  ($resources -contains "*" -or $resources -contains "pods") -and 
+                    ($verbs -contains "*" -or $verbs -contains "create")
             if (-not $containsWildcard) {
                 $updatedRules += $rule
             }
@@ -79,18 +81,15 @@ $rolesJson = kubectl get roles --all-namespaces -o json | ConvertFrom-Json
 $clusterRolesJson = kubectl get clusterroles -o json | ConvertFrom-Json
 
 # Analyze both
-$roleResults = CheckPodCreate -RolesJson $rolesJson -Type "Role"
-$clusterRoleResults = CheckPodCreate -RolesJson $clusterRolesJson -Type "ClusterRole"
-
-# Combine results
-$allResults = $roleResults + $clusterRoleResults
+$results = CheckPodCreate -RolesJson $rolesJson -Type "Role"
+$results += CheckPodCreate -RolesJson $clusterRolesJson -Type "ClusterRole"
 
 # Display
-if ($allResults.Count -eq 0) {
+if ($results.Count -eq 0) {
     Write-Host "No pod creation permission found in any Role or ClusterRole." -ForegroundColor Green
 } else {
     Write-Host "Pod creation permission detected in the following RBAC definitions:" -ForegroundColor Yellow
-    $allResults | Format-Table -AutoSize
+    $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true") {
         # --- Remove Role secret access ---
@@ -109,7 +108,7 @@ if ($allResults.Count -eq 0) {
             $name = $parts[1]
             $rolesJsonToUpdate += kubectl get role $name -n $namespace -o json | ConvertFrom-Json
         }
-        RemoveSecretAccessRules -Type "Role" -RolesJson $rolesJsonToUpdate
+        RemovePodCreateRules -Type "Role" -RolesJson $rolesJsonToUpdate
 
         # --- Remove ClusterRole secret access ---
         Write-Host "Enter ClusterRoles to remove secret access (separated by commas):" -ForegroundColor Cyan
@@ -119,6 +118,6 @@ if ($allResults.Count -eq 0) {
         foreach ($roleName in $clusterRoleNames) {
             $clusterRolesJsonToUpdate += kubectl get clusterrole $roleName -o json | ConvertFrom-Json
         }
-        RemoveSecretAccessRules -Type "ClusterRole" -RolesJson $clusterRolesJsonToUpdate
+        RemovePodCreateRules -Type "ClusterRole" -RolesJson $clusterRolesJsonToUpdate
     }
 }

@@ -79,16 +79,14 @@ Write-Host "----Checking section 4.1.2: Minimize access to secrets----" -Foregro
 $rolesJson = kubectl get roles --all-namespaces -o json | ConvertFrom-Json
 $clusterRolesJson = kubectl get clusterroles -o json | ConvertFrom-Json
 
-$roleResults = CheckSecretAccess -RolesJson $rolesJson -Type "Role"
-$clusterRoleResults = CheckSecretAccess -RolesJson $clusterRolesJson -Type "ClusterRole"
+$results = CheckSecretAccess -RolesJson $rolesJson -Type "Role"
+$results += CheckSecretAccess -RolesJson $clusterRolesJson -Type "ClusterRole"
 
-$allResults = @($roleResults) + @($clusterRoleResults)
-
-if ($allResults.Count -eq 0) {
+if ($results.Count -eq 0) {
     Write-Host "No secret access found in any Role or ClusterRole." -ForegroundColor Green
 } else {
     Write-Host "Secret access detected in the following RBAC definitions:" -ForegroundColor Yellow
-    $allResults | Format-Table -AutoSize
+    $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true") {
         # --- Remove Role secret access ---
