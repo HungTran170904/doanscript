@@ -20,7 +20,7 @@ function CheckNetworkPolicies {
 
 function SetupDefaultDenyNetworkPolicy {
     param(
-        [object]$ScanResults
+        [object]$Namespaces
     )
 
     # Define default deny ingress NetworkPolicy YAML
@@ -35,17 +35,9 @@ spec:
     - Ingress
 '@
 
-    # Define system namespaces to skip
-    $systemNamespaces = @('kube-system', 'kube-public', 'kube-node-lease', 'default')
-
-    foreach ($scanResult in $ScanResults) {
-        if ($systemNamespaces -notcontains $scanResult.Namespace) {
-            Write-Host "Applying default deny NetworkPolicy to namespace: $($scanResult.Namespace)"
-            $defaultNetworkPolicy | kubectl apply -n $scanResult.Namespace -f -
-        }
-        else {
-            Write-Host "Skipping system namespace: $($scanResult.Namespace)"
-        }
+    foreach ($ns in $Namespaces) {
+        Write-Host "Applying default deny NetworkPolicy to namespace: $ns"
+        $defaultNetworkPolicy | kubectl apply -n $ns -f -
     }
 }
 
@@ -61,6 +53,9 @@ if ($results.Count -eq 0) {
     $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true") {
-        SetupDefaultDenyNetworkPolicy -ScanResults $results
+        Write-Host "Enter list of namespace names to apply default network policy (separated by commas):" -ForegroundColor Cyan
+        $namespacesStr = Read-Host
+        $namespaces = $namespacesStr -split "," | ForEach-Object { $_.Trim() }
+        SetupDefaultDenyNetworkPolicy -Namespaces $namespaces
     }
 }

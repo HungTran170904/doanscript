@@ -2,58 +2,43 @@ param(
     [string]$EnableModify
 )
 
-function CheckMountedSAToken {
-    param (
-        [object]$PodsJson
-    )
-
+function CheckServiceAccounts {
     $results = @()
-    foreach ($pod in $PodsJson.items) {
-        $hasMountToken = $false
-
-        if (-not $pod.spec.automountServiceAccountToken) {
-            $serviceAccountName = $pod.spec.serviceAccountName
-            $sa = kubectl get sa $serviceAccountName -n $pod.metadata.namespace -o json | ConvertFrom-Json
-            if ($sa.automountServiceAccountToken -eq $false){
-                continue
+    $serviceAccountsJson = kubectl get sa --all-namespaces -o json | ConvertFrom-json
+    
+    foreach($sa in $serviceAccountsJson.items) {
+        if ($sa.automountServiceAccountToken -ne $false) {
+            $results += [PSCustomObject]@{
+                Namespace = $sa.metadata.namespace
+                ServiceAccountName = $sa.metadata.name
             }
         }
-        elseif ($pod.spec.automountServiceAccountToken -eq $false) {
-            continue
-        }
-
-        $results += [PSCustomObject]@{
-            Namespace = $pod.metadata.namespace
-            PodName = $pod.metadata.name
-        }
     }
-    
+
     return $results
 }
 
-function UpdateMountedSAToken {
+function UpdateServiceAccounts {
     param (
-        [object]$PodsJson
+        [object]$SAEntries
     )
-    
-    $namespaces = kubectl get ns -o json | ConvertFrom-Json | Select-Object -ExpandProperty items | ForEach-Object { $_.metadata.name }
-    foreach ($ns in $namespaces) {
-        Write-Host "Processing namespace '$ns'..." -ForegroundColor Cyan
 
-        # Disable token mount to all service accounts if not set
-        $serviceAccountsJson = kubectl get sa -n $ns -o json | ConvertFrom-json
-        foreach($sa in $serviceAccountsJson.items) {
+    foreach($saEntry in $SAEntries) {
+        $parts = $saEntry -split "/"
+        if ($parts.Count -ne 2) {
+            Write-Host "Skipping invalid SA entry: $saEntry" -ForegroundColor Red
+            continue
+        }
+        $ns = $parts[0]
+        $saName = $parts[1]
+        
+        $sa = kubectl get sa $saName -n $ns -o json | ConvertFrom-json
+        if($sa.automountServiceAccountToken -ne $false){
             if (-not ($sa | Get-Member -Name automountServiceAccountToken)) {
                 $sa | Add-Member -NotePropertyName automountServiceAccountToken -NotePropertyValue $false
-                $sa | ConvertTo-Json -Depth 10 | kubectl apply -f -
             }
-        }
-    }
-
-    foreach ($pod in $podsJson.items) {
-        if (-not ($pod.spec | Get-Member -Name automountServiceAccountToken)) {
-            $pod.spec | Add-Member -NotePropertyName automountServiceAccountToken -NotePropertyValue $false
-            $pod | ConvertTo-Json -Depth 10 | kubectl apply -f -
+            else { $sa.automountServiceAccountToken = $false }
+            $sa | ConvertTo-Json -Depth 10 | kubectl apply -f -
         }
     }
 }
@@ -61,16 +46,17 @@ function UpdateMountedSAToken {
 # --- Main Script ---
 Write-Host "----Checking section 4.1.6: Ensure that Service Account Tokens are only mounted where necessary----" -ForegroundColor Yellow
 
-# Check default service account usage
-$podsJson = kubectl get pods --all-namespaces -o json | ConvertFrom-Json
-$results = CheckMountedSAToken -PodsJson $podsJson
+$results = CheckServiceAccounts
 if ($results.Count -eq 0) {
-    Write-Host "No pods are mounted service account tokens." -ForegroundColor Green
+    Write-Host "No service accounts enabling automountServiceAccountToken" -ForegroundColor Green
 } else {
-    Write-Host "Service account tokens are in use in these pods:" -ForegroundColor Yellow
+    Write-Host "Tokens are enabled in use in these service accounts:" -ForegroundColor Yellow
     $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true"){
-        UpdateMountedSAToken -PodsJson $podsJson
+        Write-Host "Enter the list of service accounts to update (format: namespace/service-account-name, separated by commas):" -ForegroundColor Cyan
+        $saEntriesStr = Read-Host
+        $saEntries = $saEntriesStr -split "," | ForEach-Object { $_.Trim() }
+        UpdateServiceAccounts -SAEntries $saEntries
     }
 }

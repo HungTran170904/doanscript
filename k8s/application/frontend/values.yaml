@@ -33,7 +33,8 @@ podLabels: {}
 
 podSecurityContext: {}
 
-securityContext: {}
+securityContext:
+  privileged: true
 
 env:
   - name: API_ENDPOINT

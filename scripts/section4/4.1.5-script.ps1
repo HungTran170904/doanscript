@@ -21,9 +21,11 @@ function CheckDefaultSAUsage {
 }
 
 function UpdateDefaultSAConfig{
-    $namespaces = kubectl get ns -o json | ConvertFrom-Json | Select-Object -ExpandProperty items | ForEach-Object { $_.metadata.name }
+    param (
+        [object]$UpdateNamespaces
+    )
     
-    foreach ($ns in $namespaces) {
+    foreach ($ns in $UpdateNamespaces) {
         Write-Host "Processing namespace '$ns'..." -ForegroundColor Cyan
 
         # Update default SA to disable token mount
@@ -73,6 +75,9 @@ if ($results.Count -eq 0) {
     $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true"){
-        UpdateDefaultSAConfig
+        Write-Host "Enter list of namespace names to update default SA (separated by commas):" -ForegroundColor Cyan
+        $namespacesStr = Read-Host
+        $namespaces = $namespacesStr -split "," | ForEach-Object { $_.Trim() }
+        UpdateDefaultSAConfig -UpdateNamespaces $namespaces
     }
 }

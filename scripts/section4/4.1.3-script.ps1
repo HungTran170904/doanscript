@@ -40,7 +40,7 @@ function CheckWildcardUsage {
 }
 
 # --- Function to remove secret access rules ---
-function RemoveSecretAccessRules {
+function RemoveWildcardRules {
     param (
         [object]$RolesJson,
         [string]$Type
@@ -108,7 +108,7 @@ if ($allResults.Count -eq 0) {
             $name = $parts[1]
             $rolesJsonToUpdate += kubectl get role $name -n $namespace -o json | ConvertFrom-Json
         }
-        RemoveSecretAccessRules -Type "Role" -RolesJson $rolesJsonToUpdate
+        RemoveWildcardRules -Type "Role" -RolesJson $rolesJsonToUpdate
 
         # --- Remove ClusterRole secret access ---
         Write-Host "Enter ClusterRoles to remove secret access (separated by commas):" -ForegroundColor Cyan
@@ -118,6 +118,6 @@ if ($allResults.Count -eq 0) {
         foreach ($roleName in $clusterRoleNames) {
             $clusterRolesJsonToUpdate += kubectl get clusterrole $roleName -o json | ConvertFrom-Json
         }
-        RemoveSecretAccessRules -Type "ClusterRole" -RolesJson $clusterRolesJsonToUpdate
+        RemoveWildcardRules -Type "ClusterRole" -RolesJson $clusterRolesJsonToUpdate
     }
 }
