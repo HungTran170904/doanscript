@@ -1,0 +1,21 @@
+1. Get the application status by running these commands:
+   kubectl get jobs -n {{ include "kube-bench-slack.namespace" . }}
+   kubectl get pods -n {{ include "kube-bench-slack.namespace" . }}
+
+2. View the kube-bench scan logs:
+   kubectl logs job/{{ .Values.job.name }} -n {{ include "kube-bench-slack.namespace" . }} -c kube-bench
+
+3. View the Slack notifier logs:
+   kubectl logs job/{{ .Values.job.name }} -n {{ include "kube-bench-slack.namespace" . }} -c slack-notifier
+
+4. To update the Slack token, create a secret with your token:
+   kubectl create secret generic {{ include "kube-bench-slack.secretName" . }} \
+     --from-literal=slack-bot-token="xoxb-your-slack-token-here" \
+     --namespace={{ include "kube-bench-slack.namespace" . }}
+
+5. To clean up the deployment:
+   helm uninstall {{ .Release.Name }}
+
+{{- if .Values.dev.testMode }}
+⚠️  WARNING: Test mode is enabled. The job will send test messages instead of running actual security scans.
+{{- end }}

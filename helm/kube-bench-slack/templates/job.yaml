@@ -1,0 +1,173 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ include "kube-bench-slack.namespace" . }}
+  labels:
+    {{- include "kube-bench-slack.labels" . | nindent 4 }}
+    app: kube-bench
+    component: security-scan
+  {{- with .Values.job.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.job.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "kube-bench-slack.selectorLabels" . | nindent 8 }}
+        app: kube-bench
+        component: security-scan
+      {{- with .Values.job.labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      hostPID: true
+      restartPolicy: {{ .Values.job.restartPolicy }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      # Kube-bench container
+      - name: kube-bench
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.kubebench.image.repository }}:{{ .Values.kubebench.image.tag }}"
+        imagePullPolicy: {{ .Values.kubebench.image.pullPolicy }}
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            {{ join " " .Values.kubebench.command }} --{{ .Values.kubebench.outputFormat }} > /tmp/kube-bench-results/results.json 2>&1
+            echo "Kube-bench scan complete. Results written to /tmp/kube-bench-results/results.json"
+        volumeMounts:
+        - name: {{ .Values.volumes.shared.name }}
+          mountPath: /tmp/kube-bench-results
+        - name: var-lib-etcd
+          mountPath: /var/lib/etcd
+          readOnly: true
+        - name: var-lib-kubelet
+          mountPath: /var/lib/kubelet
+          readOnly: true
+        - name: etc-systemd
+          mountPath: /etc/systemd
+          readOnly: true
+        - name: etc-kubernetes
+          mountPath: /etc/kubernetes
+          readOnly: true
+        securityContext:
+          privileged: true
+        {{- if .Values.kubebench.resources }}
+        resources:
+          {{- toYaml .Values.kubebench.resources | nindent 10 }}
+        {{- end }}
+      
+      # Slack notification sidecar container
+      - name: slack-notifier
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "Never" }}
+        env:
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-bench-slack.secretName" . }}
+              key: slack-bot-token
+        - name: SLACK_CHANNEL
+          value: {{ .Values.slack.channel | quote }}
+        - name: KUBE_BENCH_OUTPUT_DIR
+          value: {{ .Values.slack.outputDir | quote }}
+        - name: MAX_WAIT_TIME
+          value: {{ .Values.slack.maxWaitTime | quote }}
+        {{- if and .Values.openai.enabled .Values.openai.apiKey }}
+        {{- if kindIs "string" .Values.openai.apiKey }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-bench-slack.secretName" . }}
+              key: openai-api-key
+        {{- else }}
+        # OpenAI secret exists separately
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
+        {{- else if .Values.openai.enabled }}
+        # Try to use existing OpenAI secret if enabled but apiKey not provided
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
+        {{- if .Values.dev.debug }}
+        - name: DEBUG
+          value: "true"
+        {{- end }}
+        {{- if .Values.dev.testMode }}
+        - name: TEST_MODE
+          value: "true"
+        {{- end }}
+        volumeMounts:
+        - name: {{ .Values.volumes.shared.name }}
+          mountPath: {{ .Values.slack.outputDir }}
+        - name: etc-kubernetes
+          mountPath: /etc/kubernetes
+          readOnly: true
+        {{- if .Values.slack.resources }}
+        resources:
+          {{- toYaml .Values.slack.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.monitoring.healthCheck.enabled }}
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import requests; requests.get('https://slack.com/api/auth.test', timeout=5)"
+          initialDelaySeconds: {{ .Values.monitoring.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.monitoring.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.monitoring.healthCheck.timeoutSeconds }}
+          failureThreshold: {{ .Values.monitoring.healthCheck.failureThreshold }}
+        {{- end }}
+      
+      volumes:
+      - name: {{ .Values.volumes.shared.name }}
+        {{- if eq .Values.volumes.shared.type "emptyDir" }}
+        emptyDir: {}
+        {{- else }}
+        {{- toYaml .Values.volumes.shared | nindent 8 }}
+        {{- end }}
+      - name: var-lib-etcd
+        hostPath:
+          path: /var/lib/etcd
+          type: DirectoryOrCreate
+      - name: var-lib-kubelet
+        hostPath:
+          path: /var/lib/kubelet
+          type: DirectoryOrCreate
+      - name: etc-systemd
+        hostPath:
+          path: /etc/systemd
+          type: DirectoryOrCreate
+      - name: etc-kubernetes
+        hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+      - name: {{ .Values.volumes.kubeconfig.name }}
+        hostPath:
+          path: {{ .Values.volumes.kubeconfig.hostPath.path }}
+          type: {{ .Values.volumes.kubeconfig.hostPath.type }}

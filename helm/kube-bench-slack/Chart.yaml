@@ -1,0 +1,18 @@
+apiVersion: v2
+name: kube-bench-slack
+description: A Helm chart for kube-bench security scanner with Slack notifications
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/aquasecurity/kube-bench
+sources:
+  - https://github.com/aquasecurity/kube-bench
+keywords:
+  - security
+  - kubernetes
+  - kube-bench
+  - slack
+  - monitoring
+maintainers:
+  - name: Your Name
+    email: your.email@example.com

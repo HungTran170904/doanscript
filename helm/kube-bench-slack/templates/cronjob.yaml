@@ -1,0 +1,123 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "kube-bench-slack.fullname" . }}-cronjob
+  namespace: {{ include "kube-bench-slack.namespace" . }}
+  labels:
+    {{- include "kube-bench-slack.labels" . | nindent 4 }}
+    app: kube-bench
+    component: security-scan-cron
+  {{- with .Values.cronjob.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  {{- if .Values.cronjob.suspend }}
+  suspend: true
+  {{- end }}
+  jobTemplate:
+    spec:
+      {{- if .Values.job.ttlSecondsAfterFinished }}
+      ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+            {{- include "kube-bench-slack.selectorLabels" . | nindent 12 }}
+            app: kube-bench
+            component: security-scan-cron
+          {{- with .Values.cronjob.labels }}
+          labels:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          serviceAccountName: {{ include "kube-bench-slack.serviceAccountName" . }}
+          restartPolicy: {{ .Values.job.restartPolicy }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+          # Kube-bench container
+          - name: kube-bench
+            image: "{{ .Values.global.imageRegistry }}{{ .Values.kubebench.image.repository }}:{{ .Values.kubebench.image.tag }}"
+            imagePullPolicy: {{ .Values.kubebench.image.pullPolicy }}
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                kube-bench run --targets {{ .Values.kubebench.targets }} --{{ .Values.kubebench.outputFormat }} > /tmp/kube-bench-results/results.json 2>&1
+                echo "Kube-bench scan complete. Results written to /tmp/kube-bench-results/results.json"
+            volumeMounts:
+            - name: {{ .Values.volumes.shared.name }}
+              mountPath: /tmp/kube-bench-results
+            env:
+            - name: KUBECONFIG
+              value: "/etc/kubernetes/admin.conf"
+            {{- if .Values.kubebench.securityContext }}
+            securityContext:
+              {{- toYaml .Values.kubebench.securityContext | nindent 14 }}
+            {{- end }}
+            {{- if .Values.kubebench.resources }}
+            resources:
+              {{- toYaml .Values.kubebench.resources | nindent 14 }}
+            {{- end }}
+          
+          # Slack notification sidecar container
+          - name: slack-notifier
+            image: "{{ .Values.global.imageRegistry }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy | default "Never" }}
+            env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kube-bench-slack.secretName" . }}
+                  key: slack-bot-token
+            - name: SLACK_CHANNEL
+              value: {{ .Values.slack.channel | quote }}
+            - name: KUBE_BENCH_OUTPUT_DIR
+              value: {{ .Values.slack.outputDir | quote }}
+            - name: MAX_WAIT_TIME
+              value: {{ .Values.slack.maxWaitTime | quote }}
+            {{- if .Values.dev.debug }}
+            - name: DEBUG
+              value: "true"
+            {{- end }}
+            {{- if .Values.dev.testMode }}
+            - name: TEST_MODE
+              value: "true"
+            {{- end }}
+            volumeMounts:
+            - name: {{ .Values.volumes.shared.name }}
+              mountPath: {{ .Values.slack.outputDir }}
+            - name: {{ .Values.volumes.kubeconfig.name }}
+              mountPath: /etc/kubernetes
+            {{- if .Values.slack.resources }}
+            resources:
+              {{- toYaml .Values.slack.resources | nindent 14 }}
+            {{- end }}
+          
+          volumes:
+          - name: {{ .Values.volumes.shared.name }}
+            {{- if eq .Values.volumes.shared.type "emptyDir" }}
+            emptyDir: {}
+            {{- else }}
+            {{- toYaml .Values.volumes.shared | nindent 12 }}
+            {{- end }}
+          - name: {{ .Values.volumes.kubeconfig.name }}
+            hostPath:
+              path: {{ .Values.volumes.kubeconfig.hostPath.path }}
+              type: {{ .Values.volumes.kubeconfig.hostPath.type }}
+{{- end }}
+
