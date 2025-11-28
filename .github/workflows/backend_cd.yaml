@@ -1,0 +1,63 @@
+name: Backend_CI
+
+on:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: dkhp-backend
+  WORK_DIR: dkhp_backend
+
+jobs:
+  cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build backend with Maven
+        working-directory: ${{ env.WORK_DIR }}
+        run: mvn clean package -DskipTests=true
+
+      - name: Build Docker image
+        id: image
+        run: |
+          image_tag="${IMAGE_NAME}:${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}"
+          docker build -t "$image_tag" "./${WORK_DIR}"
+          echo "image_tag=${image_tag}" >> $GITHUB_OUTPUT
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.21.0
+        with:
+          image-ref: ${{ steps.image.outputs.image_tag }}
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          format: json
+          output: trivy-report.json
+
+      # - name: Login via Azure CLI
+      #   uses: azure/login@v1
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # - name: Push docker image
+      #   uses: azure/docker-login@v1
+      #   with:
+      #     login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+      #     username: ${{ secrets.AZURE_USERNAME }}
+      #     password: ${{ secrets.AZURE_PASSWORD }}
+      # - run: |
+      #     docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_tag }}
+
+      - name: Upload Trivy scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-report
+          path: trivy-report.json
