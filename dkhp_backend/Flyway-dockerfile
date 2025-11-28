@@ -1,0 +1,6 @@
+FROM flyway/flyway
+
+# Copy sql and application.properties files
+COPY src/main/resources/migration /flyway/sql
+COPY src/main/resources/application.properties /flyway/conf/flyway.conf
+CMD ["migrate"]

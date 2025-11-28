@@ -78,18 +78,15 @@ $rolesJson = kubectl get roles --all-namespaces -o json | ConvertFrom-Json
 $clusterRolesJson = kubectl get clusterroles -o json | ConvertFrom-Json
 
 # Analyze both
-$roleResults = CheckWildcardUsage -RolesJson $rolesJson -Type "Role"
-$clusterRoleResults = CheckWildcardUsage -RolesJson $clusterRolesJson -Type "ClusterRole"
-
-# Combine results
-$allResults = $roleResults + $clusterRoleResults
+$results += CheckWildcardUsage -RolesJson $rolesJson -Type "Role"
+$results += CheckWildcardUsage -RolesJson $clusterRolesJson -Type "ClusterRole"
 
 # Display
-if ($allResults.Count -eq 0) {
+if ($results.Count -eq 0) {
     Write-Host "No wildcard found in any Role or ClusterRole." -ForegroundColor Green
 } else {
     Write-Host "Wildcard usage detected in the following RBAC definitions:" -ForegroundColor Yellow
-    $allResults | Format-Table -AutoSize
+    $results | Format-Table -AutoSize
 
     if ($EnableModify -eq "true") {
         # --- Remove Role secret access ---

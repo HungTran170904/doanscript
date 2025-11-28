@@ -36,7 +36,7 @@ if (-not $networkPolicy -or $networkPolicy -eq "none") {
             Write-Host "`nSkipping network policy installation." -ForegroundColor Yellow
         }
         Default {
-            Write-Host "`nInvalid selection. Please run the script again and choose between 1–4." -ForegroundColor Red
+            Write-Host "`nInvalid selection. Please run the script again and choose between 1-4." -ForegroundColor Red
         }
     }
 }
