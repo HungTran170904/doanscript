@@ -20,7 +20,12 @@ podLabels: {}
 
 podSecurityContext: {}
 
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 dbSecret:
   keyvaultName: "mysql-credentials"
@@ -57,7 +62,12 @@ job:
   imagePullSecrets: []
   image: "hungtran679/dkhp-flyway:latest"
   pullPolicy: IfNotPresent
-  securityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   env:
     - name: DB_HOST
       value: mysql.db.svc.cluster.local              

@@ -23,7 +23,12 @@ podLabels: {}
 
 podSecurityContext: {}
 
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 env:
   - name: API_ENDPOINT
