@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: abc/123
+  repository: bacanacr0132.azurecr.io/dkhp-backend:1d907a31-37
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -22,10 +22,8 @@ podSecurityContext: {}
 
 securityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  capabilities:
-    drop:
-      - ALL
+  runAsUser: 1000
+  runAsGroup: 1000
 
 dbSecret:
   keyvaultName: "mysql-credentials"
