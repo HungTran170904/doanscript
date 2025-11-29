@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Kubescape scan
         run: |
-          /usr/local/bin/kubescape scan --format sarif --output kubescape.sarif --fail-threshold $KUBESCAPE_THRESHOLD k8s/application/backend
+          /home/runner/.kubescape/bin scan --format sarif --output kubescape.sarif --fail-threshold $KUBESCAPE_THRESHOLD k8s/application/backend
 
       - name: Upload Kubescape SARIF report to GitHub Security tab
         if: always()
