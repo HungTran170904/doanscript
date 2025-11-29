@@ -1,4 +1,4 @@
-name: frontend_CD
+name: Frontend_CD
 
 permissions:
   contents: read
