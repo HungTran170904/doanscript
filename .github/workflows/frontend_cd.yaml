@@ -6,6 +6,7 @@ on:
 env:
   IMAGE_NAME: dkhp-frontend
   WORK_DIR: dkhp_frontend
+  AKS_NAMESPACE: app
 
 jobs:
   cd:
