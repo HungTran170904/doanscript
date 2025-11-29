@@ -54,6 +54,7 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           password: ${{ secrets.AZURE_PASSWORD }}
       - run: |
+          docker tag ${{ steps.image.outputs.image_tag }} ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_tag }}
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_tag }}
       
       - name: Upload Trivy scan report
