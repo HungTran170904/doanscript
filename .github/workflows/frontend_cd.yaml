@@ -53,7 +53,8 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           password: ${{ secrets.AZURE_PASSWORD }}
       - run: |
-          docker push ${{ steps.image.outputs.image_ref }}
+          docker tag ${{ steps.image.outputs.image_ref }} ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
+          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -77,5 +78,5 @@ jobs:
       - name: Upgrade Helm chart
         run: |
           cd ./k8s/application
-          sed -i 's|^\(\s*repository:\s*\).*|\1${{ needs.build_and_push.outputs.image_ref }}|' ./frontend/values.yaml
+          sed -i 's|^\(\s*repository:\s*\).*|\1${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ needs.build_and_push.outputs.image_ref }}|' ./frontend/values.yaml
           helm upgrade frontend ./frontend -n $AKS_NAMESPACE --install

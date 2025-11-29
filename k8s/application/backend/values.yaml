@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: bacanacr0132.azurecr.io/dkhp-backend:a5199c0f-11
+  repository: abc/123
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
