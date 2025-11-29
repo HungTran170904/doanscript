@@ -57,6 +57,7 @@ jobs:
       #     docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_tag }}
 
       - name: Upload Trivy scan report
+        if: always() && exists('trivy-report.json')
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-report
