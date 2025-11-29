@@ -39,8 +39,8 @@ jobs:
           image-ref: ${{ steps.image.outputs.image_tag }}
           exit-code: 1
           severity: CRITICAL,HIGH
-          format: json
-          output: trivy-report.json
+          format: sarif
+          output: trivy-report.sarif
 
       # - name: Login via Azure CLI
       #   uses: azure/login@v1
@@ -55,11 +55,9 @@ jobs:
       #     password: ${{ secrets.AZURE_PASSWORD }}
       # - run: |
       #     docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_tag }}
-
-      - name: Upload Trivy scan report
+      
+      - name: Upload SARIF to GitHub Security
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: trivy-scan-report
-          path: trivy-report.json
-          if-no-files-found: warn
+          sarif_file: trivy.sarif
