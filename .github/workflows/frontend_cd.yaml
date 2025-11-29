@@ -21,6 +21,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: kubescape/github-action@main
+        continue-on-error: false
+        with:
+          files: k8s/application/backend
+          frameworks: nsa,cis-aks-t1.2.0
+          severityThreshold: "critical"
+          failedThreshold: 20
+          format: sarif
+          outputFile: manifest-report.sarif
+
+      - name: Upload Kubescape k8s manifest report to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: manifest-report.sarif
+          category: kubescape-manifest-report
+      
       - name: Build Docker image
         id: image
         run: |
@@ -40,6 +57,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-report.sarif
+          category: trivy-report
 
       - name: Login via Azure CLI
         uses: azure/login@v1

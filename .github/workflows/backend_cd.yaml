@@ -37,7 +37,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: manifest-report.sarif
-          category: kubescape-manifest
+          category: kubescape-manifest-report
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -57,21 +57,19 @@ jobs:
           docker build -t "$image_ref" "./${WORK_DIR}"
           echo "image_ref=${image_ref}" >> $GITHUB_OUTPUT
 
-      - name: Scan Docker image with Kubescape
-        uses: kubescape/github-action@main
-        continue-on-error: false
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.21.0
         with:
-          image: ${{ steps.image.outputs.image_ref }}
-          severityThreshold: "critical"
+          image-ref: ${{ steps.image.outputs.image_ref }}
           format: sarif
-          outputFile: image-report.sarif
+          output: trivy-report.sarif
 
-      - name: Upload Kubescape image report to GitHub Security tab
+      - name: Upload Trivy SARIF report to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: image-report.sarif
-          category: kubescape-image
+          sarif_file: trivy-report.sarif
+          category: trivy-report
 
       - name: Login via Azure CLI
         uses: azure/login@v1
