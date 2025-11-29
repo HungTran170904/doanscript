@@ -12,7 +12,7 @@ RUN chown -R dkhp_backend. /app
 USER dkhp_backend
 
 # Endtrypoint
-ENTRYPOINT ["java","-jar","dkhp_backend.war"]
+ENTRYPOINT ["java","--add-opens", "java.base/java.io=ALL-UNNAMED", "-jar","dkhp_backend.war"]
 
 # Expose port 8080
 EXPOSE 8080
