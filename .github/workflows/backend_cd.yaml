@@ -22,19 +22,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Kubescape
-        run: |
-          curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-
-      - name: Run Kubescape scan
-        run: |
-          /home/runner/.kubescape/bin scan --format sarif --output kubescape.sarif --fail-threshold $KUBESCAPE_THRESHOLD k8s/application/backend
+      - uses: kubescape/github-action@main
+        continue-on-error: false
+        with:
+          files: k8s/application/backend
+          severityThreshold: "critical"
+          failedThreshold: 20
+          format: sarif
+          outputFile: manifest-report.sarif
 
       - name: Upload Kubescape SARIF report to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: kubescape.sarif
+          sarif_file: manifest-report.sarif
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -54,18 +55,20 @@ jobs:
           docker build -t "$image_ref" "./${WORK_DIR}"
           echo "image_ref=${image_ref}" >> $GITHUB_OUTPUT
 
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.21.0
+      - name: Scan Docker image with Kubescape
+        uses: kubescape/github-action@main
+        continue-on-error: false
         with:
-          image-ref: ${{ steps.image.outputs.image_ref }}
+          image: ${{ steps.image.outputs.image_ref }}
+          severityThreshold: "critical"
           format: sarif
-          output: trivy-report.sarif
+          outputFile: image-report.sarif
 
       - name: Upload Trivy SARIF report to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-report.sarif
+          sarif_file: image-report.sarif
 
       - name: Login via Azure CLI
         uses: azure/login@v1
