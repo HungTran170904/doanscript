@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: hungtran679/dkhp_demo-backend-service:latest
+  repository: bacanacr0132.azurecr.io/dkhp-backend:a5199c0f-11
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
