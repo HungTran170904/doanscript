@@ -65,7 +65,7 @@ jobs:
           password: ${{ secrets.AZURE_PASSWORD }}
       - run: |
           docker tag ${{ steps.image.outputs.image_ref }} ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
-          docker push ${{ steps.image.outputs.image_ref }}
+          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
 
   deploy:
     runs-on: ubuntu-latest
