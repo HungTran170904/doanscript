@@ -5,25 +5,15 @@
 replicaCount: 1
 
 image:
-  repository: hungtran679/dkhp_demo-frontend-service:latest
-  pullPolicy: Always
+  repository: bacanacr0132.azurecr.io/dkhp-frontend:c8e07e24-5
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
 rbac:
-  create: true
-  annotations: {}
-  role:
-    resources: ["pods", "services", "secrets"]
-    verbs: ["*"]
-    # verbs: ["get", "list", "watch"]
-  rolebinding:
-    subjects:
-      - kind: ServiceAccount
-        name: nginx-exporter
-        namespace: monitoring
+  create: false
 
 serviceAccount:
   create: false
@@ -34,7 +24,12 @@ podLabels: {}
 podSecurityContext: {}
 
 securityContext:
-  privileged: true
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 env:
   - name: API_ENDPOINT
@@ -64,7 +59,13 @@ autoscaling:
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
 
-resources: {}
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
 
 nodeSelector: {}
 

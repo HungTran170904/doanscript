@@ -20,7 +20,13 @@ podLabels: {}
 
 podSecurityContext: {}
 
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 dbSecret:
   keyvaultName: "mysql-credentials"
@@ -57,6 +63,13 @@ job:
   imagePullSecrets: []
   image: "hungtran679/dkhp-flyway:latest"
   pullPolicy: IfNotPresent
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   env:
     - name: DB_HOST
       value: mysql.db.svc.cluster.local              
@@ -71,6 +84,13 @@ job:
         secretKeyRef:
           name: mysql-credentials
           key: db-root-password
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
   volumes:
     - name: secrets-store-inline
       csi:
@@ -105,7 +125,13 @@ autoscaling:
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
 
-resources: {}
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
 
 nodeSelector: {}
 

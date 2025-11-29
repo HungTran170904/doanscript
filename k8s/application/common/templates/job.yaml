@@ -19,6 +19,8 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.job.securityContext | nindent 12 }}
           image: {{ .Values.job.image }}
           imagePullPolicy: {{ .Values.job.pullPolicy }}
           {{- with .Values.job.command }}
@@ -27,6 +29,8 @@ spec:
           {{- end }}
           env:
             {{- toYaml .Values.job.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.job.resources | nindent 12 }}
           {{- with .Values.job.volumeMounts }}
           volumeMounts:
             {{- toYaml . | nindent 12 }}
