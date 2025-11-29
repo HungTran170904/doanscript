@@ -14,7 +14,7 @@ env:
   KUBESCAPE_THRESHOLD: 20
 
 jobs:
-  build_and_push:
+  build_and_scan:
     runs-on: ubuntu-latest
     outputs:
       image_ref: ${{ steps.image.outputs.image_ref }}
@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Kubescape scan
         run: |
-          kubescape scan --format sarif --output kubescape.sarif --fail-threshold $KUBESCAPE_THRESHOLD k8s/application/backend
+          /usr/local/bin/kubescape scan --format sarif --output kubescape.sarif --fail-threshold $KUBESCAPE_THRESHOLD k8s/application/backend
 
       - name: Upload Kubescape SARIF report to GitHub Security tab
         if: always()
@@ -85,7 +85,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: Prod
-    needs: build_and_push
+    needs: build_and_scan
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,5 +104,5 @@ jobs:
       - name: Upgrade Helm chart
         run: |
           cd ./k8s/application
-          sed -i 's|^\(\s*repository:\s*\).*|\1${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ needs.build_and_push.outputs.image_ref }}|' ./backend/values.yaml
+          sed -i 's|^\(\s*repository:\s*\).*|\1${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ needs.build_and_scan.outputs.image_ref }}|' ./backend/values.yaml
           helm upgrade backend ./backend -n $AKS_NAMESPACE --install
