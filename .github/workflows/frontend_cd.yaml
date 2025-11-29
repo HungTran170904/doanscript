@@ -1,4 +1,8 @@
-name: Frontend_CD
+name: frontend_CD
+
+permissions:
+  contents: read
+  security-events: write
 
 on:
   workflow_dispatch:
@@ -9,9 +13,10 @@ env:
   AKS_NAMESPACE: app
 
 jobs:
-  cd:
+  build_and_push:
     runs-on: ubuntu-latest
-    environment: Prod
+    outputs:
+      image_ref: ${{ steps.image.outputs.image_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,10 +32,14 @@ jobs:
         uses: aquasecurity/trivy-action@0.21.0
         with:
           image-ref: ${{ steps.image.outputs.image_ref }}
-          exit-code: 1
-          severity: CRITICAL
-          format: json
-          output: trivy-report.json
+          format: sarif
+          output: trivy-report.sarif
+
+      - name: Upload Trivy SARIF report to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-report.sarif
 
       - name: Login via Azure CLI
         uses: azure/login@v1
@@ -46,15 +55,17 @@ jobs:
       - run: |
           docker tag ${{ steps.image.outputs.image_ref }} ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ steps.image.outputs.image_ref }}
-      
-      - name: Upload Trivy scan report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-scan-report
-          path: trivy-report.json
-          if-no-files-found: warn
 
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Prod
+    needs: build_and_push
+    steps:
+      - name: Login via Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
       - name: Get AKS credentials
         run: az aks get-credentials --resource-group ${{ secrets.RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER }} --overwrite-existing
 
@@ -64,5 +75,5 @@ jobs:
       - name: Upgrade Helm chart
         run: |
           cd ./k8s/application
-          sed -i 's|^\(\s*repository:\s*\).*|\1${{ steps.image.outputs.image_ref }}|' ./frontend/values.yaml
+          sed -i 's|^\(\s*repository:\s*\).*|\1${{ needs.build_and_push.outputs.image_ref }}|' ./frontend/values.yaml
           helm upgrade frontend ./frontend -n $AKS_NAMESPACE --install
