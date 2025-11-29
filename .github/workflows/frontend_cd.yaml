@@ -1,4 +1,4 @@
-name: Frontend_CI
+name: Frontend_CD
 
 on:
   workflow_dispatch:
@@ -53,3 +53,15 @@ jobs:
           name: trivy-scan-report
           path: trivy-report.json
           if-no-files-found: warn
+
+      - name: Get AKS credentials
+        run: az aks get-credentials --resource-group ${{ secrets.RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER }} --overwrite-existing
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Upgrade Helm chart
+        run: |
+          cd ./k8s/application
+          sed -i 's|^\(\s*repository:\s*\).*|\1${{ steps.image.outputs.image_ref }}|' ./frontend/values.yaml
+          helm upgrade frontend ./frontend -n $AKS_NAMESPACE --install
