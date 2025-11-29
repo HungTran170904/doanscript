@@ -72,6 +72,9 @@ jobs:
     environment: Prod
     needs: build_and_push
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
       - name: Login via Azure CLI
         uses: azure/login@v1
         with:
