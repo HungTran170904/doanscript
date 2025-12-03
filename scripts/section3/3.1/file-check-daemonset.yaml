@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: file-check
+spec:
+  selector:
+    matchLabels:
+      app: file-check
+  template:
+    metadata:
+      labels:
+        app: file-check
+    spec:
+      containers:
+      - name: nsenter
+        image: busybox
+        command: ["sleep", "3600"]
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        securityContext:
+          privileged: true
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+
+# kubectl exec -it <tên_pod> -- sh
+# ls -l /host/var/lib/kubelet/kubeconfig
