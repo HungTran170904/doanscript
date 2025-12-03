@@ -5,7 +5,7 @@
 # ===============================
 
 echo "==============================="
-echo " Danh sách Namespace hiện có:"
+echo " Danh sách Namespace hiện cóo:"
 echo "==============================="
 kubectl get namespaces
 
