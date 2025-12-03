@@ -15,4 +15,5 @@ USER dkhp_backend
 ENTRYPOINT ["java","--add-opens", "java.base/java.io=ALL-UNNAMED", "-jar","dkhp_backend.war"]
 
 # Expose port 8080
-EXPOSE 8080
+EXPOSE 80800
+
