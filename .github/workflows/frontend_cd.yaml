@@ -25,7 +25,7 @@ jobs:
         continue-on-error: false
         with:
           files: k8s/application/backend
-          frameworks: nsa,cis-aks-t1.2.0
+          frameworks: cis-v1-10.0
           severityThreshold: "critical"
           failedThreshold: 20
           format: sarif
@@ -36,7 +36,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: manifest-report.sarif
-          category: kubescape-manifest-report
+          category: frontend-kubescape-manifest-report
       
       - name: Build Docker image
         id: image

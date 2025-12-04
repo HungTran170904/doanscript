@@ -26,7 +26,7 @@ jobs:
         continue-on-error: false
         with:
           files: k8s/application/backend
-          frameworks: nsa,cis-aks-t1.2.0
+          frameworks: cis-v1-10.0
           severityThreshold: "critical"
           failedThreshold: 20
           format: sarif
