@@ -15,7 +15,8 @@ KUBECONFIG_PATH="/host/var/lib/kubelet/kubeconfig"
 AZURE_JSON_PATH="/host/etc/kubernetes/azure.json"
 TARGET_PERMISSION="600"
 TARGET_OWNER="root:root"
-BACKUP_DIR="./aks-backups"
+# Backup directory on local machine (outside cluster for safety)
+BACKUP_DIR="$HOME/aks-backups"
 ARM_TEMPLATE_FILE="aks-arm-template-$(date +%Y%m%d-%H%M%S).json"
 
 
