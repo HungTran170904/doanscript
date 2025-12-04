@@ -16,3 +16,5 @@ ENTRYPOINT ["java","--add-opens", "java.base/java.io=ALL-UNNAMED", "-jar","dkhp_
 
 # Expose port 8080
 EXPOSE 8080
+
+
