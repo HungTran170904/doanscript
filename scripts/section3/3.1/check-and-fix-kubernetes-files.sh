@@ -15,6 +15,8 @@ KUBECONFIG_PATH="/host/var/lib/kubelet/kubeconfig"
 AZURE_JSON_PATH="/host/etc/kubernetes/azure.json"
 TARGET_PERMISSION="600"
 TARGET_OWNER="root:root"
+BACKUP_DIR="./aks-backups"
+CONFIG_BACKUP_FILE="aks-config-$(date +%Y%m%d-%H%M%S).yaml"
 
 
 print_header() {
@@ -209,6 +211,78 @@ fix_file() {
     kubectl exec $pod -n $NAMESPACE -- ls -l $file
 }
 
+# Export AKS configuration
+export_aks_config() {
+    print_header "Exporting AKS Configuration"
+    
+    # Create backup directory if it doesn't exist
+    if [ ! -d "$BACKUP_DIR" ]; then
+        mkdir -p "$BACKUP_DIR"
+        print_info "Created backup directory: $BACKUP_DIR"
+    fi
+    
+    # Check if Azure CLI is installed
+    if ! command -v az &> /dev/null; then
+        print_error "Azure CLI (az) is not installed or not in PATH"
+        print_info "Please install Azure CLI: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+        return 1
+    fi
+    
+    # Check if user is logged in to Azure
+    if ! az account show &> /dev/null; then
+        print_error "Not logged in to Azure CLI"
+        print_info "Please run: az login"
+        return 1
+    fi
+    
+    # Get current AKS cluster info from kubectl
+    print_info "Getting current cluster information..."
+    local cluster_info=$(kubectl config current-context 2>/dev/null)
+    
+    if [ -z "$cluster_info" ]; then
+        print_error "No active kubectl context found"
+        print_info "Please ensure kubectl is configured and connected to your AKS cluster"
+        return 1
+    fi
+    
+    print_info "Current cluster context: $cluster_info"
+    
+    # Prompt for Resource Group and AKS name
+    echo -e "\n${YELLOW}Please provide AKS cluster information:${NC}"
+    read -p "Enter Resource Group name: " resource_group
+    read -p "Enter AKS cluster name: " aks_name
+    
+    if [ -z "$resource_group" ] || [ -z "$aks_name" ]; then
+        print_error "Resource Group and AKS name are required"
+        return 1
+    fi
+    
+    # Export AKS configuration
+    local backup_path="$BACKUP_DIR/$CONFIG_BACKUP_FILE"
+    print_info "Exporting AKS configuration to: $backup_path"
+    
+    if az aks show -g "$resource_group" -n "$aks_name" -o yaml > "$backup_path" 2>/dev/null; then
+        print_success "AKS configuration exported successfully!"
+        print_info "Backup saved to: $backup_path"
+        
+        # Show file size for verification
+        local file_size=$(wc -c < "$backup_path" 2>/dev/null || echo "unknown")
+        print_info "Backup file size: ${file_size} bytes"
+        
+        return 0
+    else
+        print_error "Failed to export AKS configuration"
+        print_error "Please verify:"
+        print_error "  - Resource Group: $resource_group"
+        print_error "  - AKS cluster name: $aks_name"
+        print_error "  - Azure CLI permissions"
+        
+        # Remove empty file if created
+        [ -f "$backup_path" ] && rm -f "$backup_path"
+        return 1
+    fi
+}
+
 # Cleanup DaemonSet
 cleanup_daemonset() {
     print_header "Cleaning up DaemonSet"
@@ -223,10 +297,11 @@ show_menu() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${YELLOW}Please select an option:${NC}"
     echo -e "${GREEN}1.${NC} Check permissions only"
-    echo -e "${GREEN}2.${NC} Fix permissions"
-    echo -e "${GREEN}3.${NC} Exit program"
+    echo -e "${GREEN}2.${NC} Fix permissions (with backup option)"
+    echo -e "${GREEN}3.${NC} Export AKS configuration"
+    echo -e "${GREEN}4.${NC} Exit program"
     echo -e "${BLUE}========================================${NC}"
-    echo -n "Enter your choice [1-3]: "
+    echo -n "Enter your choice [1-4]: "
 }
 
 # Check permissions only
@@ -283,6 +358,27 @@ fix_permissions() {
     print_header "Fixing File Permissions"
     echo "Target permissions: $TARGET_PERMISSION"
     echo "Target ownership: $TARGET_OWNER"
+    
+    # Ask if user wants to export AKS config first
+    echo -e "\n${YELLOW}Before making changes, would you like to export AKS configuration as backup?${NC}"
+    read -p "Export AKS config? (Y/n) " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        if export_aks_config; then
+            print_success "Configuration backup completed"
+        else
+            print_warning "Configuration backup failed, but continuing with permission fixes..."
+            read -p "Continue anyway? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_info "Operation cancelled by user"
+                return 1
+            fi
+        fi
+    else
+        print_warning "Skipping configuration backup (not recommended)"
+    fi
 
     # Deploy DaemonSet
     deploy_daemonset
@@ -364,6 +460,9 @@ main() {
                 fix_permissions
                 ;;
             3)
+                export_aks_config
+                ;;
+            4)
                 print_info "Exiting program..."
                 # Clean up any existing DaemonSet before exiting
                 if kubectl get daemonset $DAEMONSET_NAME -n $NAMESPACE &> /dev/null; then
@@ -373,7 +472,7 @@ main() {
                 exit 0
                 ;;
             *)
-                print_error "Invalid option. Please choose 1, 2, or 3."
+                print_error "Invalid option. Please choose 1, 2, 3, or 4."
                 ;;
         esac
 
