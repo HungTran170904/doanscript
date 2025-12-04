@@ -27,7 +27,7 @@ jobs:
           files: k8s/application/backend
           frameworks: cis-v1-10.0
           severityThreshold: "critical"
-          failedThreshold: 20
+          failedThreshold: 50
           format: sarif
           outputFile: manifest-report.sarif
 

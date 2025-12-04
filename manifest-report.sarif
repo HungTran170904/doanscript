@@ -37,21 +37,6 @@
               "help": {
                 "text": "Remediation: Use security context to enable the `docker/default` seccomp profile in your pod definitions. An example is as below:\n\n \n```\n  securityContext:\n    seccompProfile:\n      type: RuntimeDefault\n\n```"
               }
-            },
-            {
-              "id": "C-0207",
-              "shortDescription": {
-                "text": "CIS-5.4.1 Prefer using secrets as files over secrets as environment variables"
-              },
-              "fullDescription": {
-                "text": "Kubernetes supports mounting secrets as data volumes or as environment variables. Minimize the use of environment variable secrets."
-              },
-              "defaultConfiguration": {
-                "level": "warning"
-              },
-              "help": {
-                "text": "Remediation: If possible, rewrite application code to read secrets from mounted secret files, rather than from environment variables."
-              }
             }
           ]
         }
@@ -67,7 +52,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/deployment.yaml"
+                  "uri": "k8s/application/frontend/templates/deployment.yaml"
                 },
                 "region": {
                   "startLine": 1,
@@ -87,87 +72,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/deployment.yaml"
-                },
-                "region": {
-                  "startLine": 1,
-                  "startColumn": 1
-                }
-              }
-            }
-          ]
-        },
-        {
-          "ruleId": "C-0207",
-          "ruleIndex": 2,
-          "message": {
-            "text": "Kubernetes supports mounting secrets as data volumes or as environment variables. Minimize the use of environment variable secrets."
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/deployment.yaml"
-                },
-                "region": {
-                  "startLine": 1,
-                  "startColumn": 1
-                }
-              }
-            }
-          ]
-        },
-        {
-          "ruleId": "C-0211",
-          "ruleIndex": 0,
-          "message": {
-            "text": "Apply Security Context to Your Pods and Containers"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/job.yaml"
-                },
-                "region": {
-                  "startLine": 1,
-                  "startColumn": 1
-                }
-              }
-            }
-          ]
-        },
-        {
-          "ruleId": "C-0210",
-          "ruleIndex": 1,
-          "message": {
-            "text": "Enable `docker/default` seccomp profile in your pod definitions."
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/job.yaml"
-                },
-                "region": {
-                  "startLine": 1,
-                  "startColumn": 1
-                }
-              }
-            }
-          ]
-        },
-        {
-          "ruleId": "C-0207",
-          "ruleIndex": 2,
-          "message": {
-            "text": "Kubernetes supports mounting secrets as data volumes or as environment variables. Minimize the use of environment variable secrets."
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "k8s/application/backend/templates/job.yaml"
+                  "uri": "k8s/application/frontend/templates/deployment.yaml"
                 },
                 "region": {
                   "startLine": 1,
