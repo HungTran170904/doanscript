@@ -269,9 +269,6 @@ export_aks_config() {
     
     case $backup_choice in
         1)
-            # Export ARM template only
-            ;
-    
             # Export ARM template
             local arm_template_path="$BACKUP_DIR/$ARM_TEMPLATE_FILE"
             print_info "Exporting ARM template to: $arm_template_path"
