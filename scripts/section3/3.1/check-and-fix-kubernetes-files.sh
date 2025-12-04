@@ -163,56 +163,6 @@ check_file_only() {
 
     return 0
 }
-
-# Fix file permissions and ownership
-fix_file() {
-    local pod=$1
-    local file=$2
-    local file_name=$3
-    local node=$(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')
-
-    echo -e "\n${BLUE}--- Fixing $file_name on node: $node (pod: $pod) ---${NC}"
-
-    # Check if file exists
-    if ! file_exists $pod $file; then
-        print_warning "File $file does not exist on this node"
-        return
-    fi
-
-    print_info "File exists: $file"
-
-    # Check and fix permissions
-    local current_perm=$(get_permissions $pod $file)
-    echo "Current permissions: $current_perm"
-
-    if is_permission_acceptable $current_perm; then
-        print_success "Permissions are already acceptable ($current_perm)"
-    else
-        print_error "Permissions are too permissive ($current_perm)"
-        fix_file_permissions $pod $file
-        local new_perm=$(get_permissions $pod $file)
-        print_success "Permissions fixed: $current_perm -> $new_perm"
-    fi
-
-    # Check and fix ownership
-    local current_owner=$(get_ownership $pod $file)
-    echo "Current ownership: $current_owner"
-
-    if [ "$current_owner" = "$TARGET_OWNER" ]; then
-        print_success "Ownership is already correct ($current_owner)"
-    else
-        print_error "Ownership is incorrect ($current_owner)"
-        fix_ownership $pod $file
-        local new_owner=$(get_ownership $pod $file)
-        print_success "Ownership fixed: $current_owner -> $new_owner"
-    fi
-
-    # Final verification
-    echo -e "\n${GREEN}Final status:${NC}"
-    kubectl exec $pod -n $NAMESPACE -- ls -l $file
-}
-
-# Export AKS configuration (simplified)
 export_aks_config() {
     print_header "AKS Configuration Backup"
     
@@ -264,6 +214,55 @@ export_aks_config() {
         return 1
     fi
 }
+# Fix file permissions and ownership
+fix_file() {
+    local pod=$1
+    local file=$2
+    local file_name=$3
+    local node=$(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')
+
+    echo -e "\n${BLUE}--- Fixing $file_name on node: $node (pod: $pod) ---${NC}"
+
+    # Check if file exists
+    if ! file_exists $pod $file; then
+        print_warning "File $file does not exist on this node"
+        return
+    fi
+
+    print_info "File exists: $file"
+
+    # Check and fix permissions
+    local current_perm=$(get_permissions $pod $file)
+    echo "Current permissions: $current_perm"
+
+    if is_permission_acceptable $current_perm; then
+        print_success "Permissions are already acceptable ($current_perm)"
+    else
+        print_error "Permissions are too permissive ($current_perm)"
+        fix_file_permissions $pod $file
+        local new_perm=$(get_permissions $pod $file)
+        print_success "Permissions fixed: $current_perm -> $new_perm"
+    fi
+
+    # Check and fix ownership
+    local current_owner=$(get_ownership $pod $file)
+    echo "Current ownership: $current_owner"
+
+    if [ "$current_owner" = "$TARGET_OWNER" ]; then
+        print_success "Ownership is already correct ($current_owner)"
+    else
+        print_error "Ownership is incorrect ($current_owner)"
+        fix_ownership $pod $file
+        local new_owner=$(get_ownership $pod $file)
+        print_success "Ownership fixed: $current_owner -> $new_owner"
+    fi
+
+    # Final verification
+    echo -e "\n${GREEN}Final status:${NC}"
+    kubectl exec $pod -n $NAMESPACE -- ls -l $file
+}
+
+
 
 # Cleanup DaemonSet
 cleanup_daemonset() {
@@ -441,11 +440,12 @@ main() {
                 check_permissions_only
                 ;;
             2)
-                run_fix_permissions
-                ;;
-            3)
                 export_aks_config
                 ;;
+            3)
+                run_fix_permissions
+                ;;
+         
             4)
                 print_info "Exiting program..."
                 # Clean up any existing DaemonSet before exiting
