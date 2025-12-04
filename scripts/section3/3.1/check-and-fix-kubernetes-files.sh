@@ -119,8 +119,8 @@ fix_ownership() {
     kubectl exec $pod -n $NAMESPACE -- chown $TARGET_OWNER $file
 }
 
-# Check and fix a single file on a pod
-check_and_fix_file() {
+# Check file permissions only (no fixing)
+check_file_only() {
     local pod=$1
     local file=$2
     local file_name=$3
@@ -131,7 +131,7 @@ check_and_fix_file() {
     # Check if file exists
     if ! file_exists $pod $file; then
         print_warning "File $file does not exist on this node"
-        return
+        return 0
     fi
 
     print_info "File exists: $file"
@@ -142,13 +142,9 @@ check_and_fix_file() {
 
     if is_permission_acceptable $current_perm; then
         print_success "Permissions are acceptable ($current_perm)"
-        local perm_fixed=false
     else
-        print_error "Permissions are too permissive ($current_perm)"
-        fix_permissions $pod $file
-        local new_perm=$(get_permissions $pod $file)
-        print_success "Permissions fixed: $current_perm -> $new_perm"
-        local perm_fixed=true
+        print_error "Permissions are too permissive ($current_perm) - should be 600, 644, or 400"
+        return 1
     fi
 
     # Check ownership
@@ -157,20 +153,60 @@ check_and_fix_file() {
 
     if [ "$current_owner" = "$TARGET_OWNER" ]; then
         print_success "Ownership is correct ($current_owner)"
-        local owner_fixed=false
+    else
+        print_error "Ownership is incorrect ($current_owner) - should be $TARGET_OWNER"
+        return 1
+    fi
+
+    return 0
+}
+
+# Fix file permissions and ownership
+fix_file() {
+    local pod=$1
+    local file=$2
+    local file_name=$3
+    local node=$(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')
+
+    echo -e "\n${BLUE}--- Fixing $file_name on node: $node (pod: $pod) ---${NC}"
+
+    # Check if file exists
+    if ! file_exists $pod $file; then
+        print_warning "File $file does not exist on this node"
+        return
+    fi
+
+    print_info "File exists: $file"
+
+    # Check and fix permissions
+    local current_perm=$(get_permissions $pod $file)
+    echo "Current permissions: $current_perm"
+
+    if is_permission_acceptable $current_perm; then
+        print_success "Permissions are already acceptable ($current_perm)"
+    else
+        print_error "Permissions are too permissive ($current_perm)"
+        fix_permissions $pod $file
+        local new_perm=$(get_permissions $pod $file)
+        print_success "Permissions fixed: $current_perm -> $new_perm"
+    fi
+
+    # Check and fix ownership
+    local current_owner=$(get_ownership $pod $file)
+    echo "Current ownership: $current_owner"
+
+    if [ "$current_owner" = "$TARGET_OWNER" ]; then
+        print_success "Ownership is already correct ($current_owner)"
     else
         print_error "Ownership is incorrect ($current_owner)"
         fix_ownership $pod $file
         local new_owner=$(get_ownership $pod $file)
         print_success "Ownership fixed: $current_owner -> $new_owner"
-        local owner_fixed=true
     fi
 
     # Final verification
-    if [ "$perm_fixed" = true ] || [ "$owner_fixed" = true ]; then
-        echo -e "\n${GREEN}Final status:${NC}"
-        kubectl exec $pod -n $NAMESPACE -- ls -l $file
-    fi
+    echo -e "\n${GREEN}Final status:${NC}"
+    kubectl exec $pod -n $NAMESPACE -- ls -l $file
 }
 
 # Cleanup DaemonSet
@@ -180,9 +216,71 @@ cleanup_daemonset() {
     print_success "DaemonSet deleted"
 }
 
-# Main execution
-main() {
-    print_header "Kubernetes File Security Checker and Fixer"
+# Show main menu
+show_menu() {
+    echo -e "\n${BLUE}========================================${NC}"
+    echo -e "${BLUE}  Kubernetes File Security Manager${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${YELLOW}Please select an option:${NC}"
+    echo -e "${GREEN}1.${NC} Check permissions only"
+    echo -e "${GREEN}2.${NC} Fix permissions"
+    echo -e "${GREEN}3.${NC} Exit program"
+    echo -e "${BLUE}========================================${NC}"
+    echo -n "Enter your choice [1-3]: "
+}
+
+# Check permissions only
+check_permissions_only() {
+    print_header "Checking File Permissions (Read-Only Mode)"
+    echo "Target permissions: $TARGET_PERMISSION (or 644/400)"
+    echo "Target ownership: $TARGET_OWNER"
+
+    # Deploy DaemonSet
+    deploy_daemonset
+
+    # Get all pods
+    pods=($(get_pods))
+
+    if [ ${#pods[@]} -eq 0 ]; then
+        print_error "No pods found. DaemonSet may not be running."
+        return 1
+    fi
+
+    print_info "Found ${#pods[@]} node(s) to check"
+
+    local issues_found=false
+
+    # Check each file on each pod
+    for pod in "${pods[@]}"; do
+        print_header "Node: $(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')"
+
+        # Check kubeconfig
+        if ! check_file_only $pod $KUBECONFIG_PATH "kubeconfig"; then
+            issues_found=true
+        fi
+
+        # Check azure.json
+        if ! check_file_only $pod $AZURE_JSON_PATH "azure.json"; then
+            issues_found=true
+        fi
+    done
+
+    # Summary
+    print_header "Check Summary"
+    if [ "$issues_found" = true ]; then
+        print_warning "Issues found! Some files have incorrect permissions or ownership."
+        print_info "Use option 2 to fix the issues."
+    else
+        print_success "All file permissions and ownership are correct!"
+    fi
+
+    show_file_status
+    cleanup_prompt
+}
+
+# Fix permissions
+fix_permissions() {
+    print_header "Fixing File Permissions"
     echo "Target permissions: $TARGET_PERMISSION"
     echo "Target ownership: $TARGET_OWNER"
 
@@ -190,31 +288,36 @@ main() {
     deploy_daemonset
 
     # Get all pods
-    print_header "Checking Files on All Nodes"
     pods=($(get_pods))
 
     if [ ${#pods[@]} -eq 0 ]; then
         print_error "No pods found. DaemonSet may not be running."
-        exit 1
+        return 1
     fi
 
-    print_info "Found ${#pods[@]} node(s) to check" 
+    print_info "Found ${#pods[@]} node(s) to fix"
 
-    # Check each file on each pod
+    # Fix each file on each pod
     for pod in "${pods[@]}"; do
         print_header "Node: $(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')"
 
-        # Check kubeconfig
-        check_and_fix_file $pod $KUBECONFIG_PATH "kubeconfig"
+        # Fix kubeconfig
+        fix_file $pod $KUBECONFIG_PATH "kubeconfig"
 
-        # Check azure.json
-        check_and_fix_file $pod $AZURE_JSON_PATH "azure.json"
+        # Fix azure.json
+        fix_file $pod $AZURE_JSON_PATH "azure.json"
     done
 
     # Summary
-    print_header "Summary"
-    print_success "All checks and fixes completed successfully!"
+    print_header "Fix Summary"
+    print_success "All fixes completed successfully!"
 
+    show_file_status
+    cleanup_prompt
+}
+
+# Show file status on all nodes
+show_file_status() {
     echo -e "\nFinal file status on all nodes:"
     for pod in "${pods[@]}"; do
         local node=$(kubectl get pod $pod -n $NAMESPACE -o jsonpath='{.spec.nodeName}')
@@ -230,8 +333,10 @@ main() {
             kubectl exec $pod -n $NAMESPACE -- ls -l $AZURE_JSON_PATH 2>/dev/null || echo "  Error reading file"
         fi
     done
+}
 
-    # Cleanup
+# Cleanup prompt
+cleanup_prompt() {
     echo -e "\n"
     read -p "Do you want to cleanup the DaemonSet? (y/N) " -n 1 -r
     echo
@@ -240,6 +345,47 @@ main() {
     else
         print_info "DaemonSet kept running. Delete manually with: kubectl delete daemonset $DAEMONSET_NAME -n $NAMESPACE"
     fi
+}
+
+# Main execution
+main() {
+    print_header "Kubernetes File Security Manager"
+
+    while true; do
+        show_menu
+        read -n 1 choice
+        echo
+
+        case $choice in
+            1)
+                check_permissions_only
+                ;;
+            2)
+                fix_permissions
+                ;;
+            3)
+                print_info "Exiting program..."
+                # Clean up any existing DaemonSet before exiting
+                if kubectl get daemonset $DAEMONSET_NAME -n $NAMESPACE &> /dev/null; then
+                    print_info "Cleaning up existing DaemonSet before exit..."
+                    cleanup_daemonset
+                fi
+                exit 0
+                ;;
+            *)
+                print_error "Invalid option. Please choose 1, 2, or 3."
+                ;;
+        esac
+
+        # Ask if user wants to continue
+        echo -e "\n"
+        read -p "Do you want to return to main menu? (Y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            print_info "Exiting program..."
+            exit 0
+        fi
+    done
 }
 
 # Run main function
