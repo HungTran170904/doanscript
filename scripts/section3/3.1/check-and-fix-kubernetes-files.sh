@@ -16,7 +16,8 @@ AZURE_JSON_PATH="/host/etc/kubernetes/azure.json"
 TARGET_PERMISSION="600"
 TARGET_OWNER="root:root"
 BACKUP_DIR="./aks-backups"
-CONFIG_BACKUP_FILE="aks-config-$(date +%Y%m%d-%H%M%S).yaml"
+AKS_CONFIG_FILE="aks-config-$(date +%Y%m%d-%H%M%S).json"
+ARM_TEMPLATE_FILE="aks-arm-template-$(date +%Y%m%d-%H%M%S).json"
 
 
 print_header() {
@@ -213,7 +214,7 @@ fix_file() {
 
 # Export AKS configuration
 export_aks_config() {
-    print_header "Exporting AKS Configuration"
+    print_header "AKS Configuration Backup"
     
     # Create backup directory if it doesn't exist
     if [ ! -d "$BACKUP_DIR" ]; then
@@ -257,28 +258,178 @@ export_aks_config() {
         return 1
     fi
     
-    # Export AKS configuration
-    local backup_path="$BACKUP_DIR/$CONFIG_BACKUP_FILE"
-    print_info "Exporting AKS configuration to: $backup_path"
+    # Show backup options
+    echo -e "\n${YELLOW}Choose backup method:${NC}"
+    echo -e "${GREEN}1.${NC} AKS Configuration only (JSON format) - ~70% rollback capability"
+    echo -e "${GREEN}2.${NC} Full ARM Template (entire Resource Group) - ~85% rollback capability"
+    echo -e "${GREEN}3.${NC} Complete backup (ARM + Kubernetes resources) - ~95% rollback capability"
+    echo -e "${GREEN}4.${NC} Basic backup (option 1 + 2)"
+    echo -n "Enter your choice [1-4]: "
+    read -n 1 backup_choice
+    echo
     
-    if az aks show -g "$resource_group" -n "$aks_name" -o yaml > "$backup_path" 2>/dev/null; then
-        print_success "AKS configuration exported successfully!"
-        print_info "Backup saved to: $backup_path"
+    local success=false
+    
+    case $backup_choice in
+        1|3|4)
+            # Export AKS configuration only
+            local aks_config_path="$BACKUP_DIR/$AKS_CONFIG_FILE"
+            print_info "Exporting AKS configuration to: $aks_config_path"
+            
+            if az aks show --resource-group "$resource_group" --name "$aks_name" > "$aks_config_path" 2>/dev/null; then
+                print_success "AKS configuration exported successfully!"
+                print_info "AKS config saved to: $aks_config_path"
+                
+                local file_size=$(wc -c < "$aks_config_path" 2>/dev/null || echo "unknown")
+                print_info "File size: ${file_size} bytes"
+                success=true
+            else
+                print_error "Failed to export AKS configuration"
+                [ -f "$aks_config_path" ] && rm -f "$aks_config_path"
+            fi
+            
+            if [ "$backup_choice" = "1" ]; then
+                [ "$success" = true ] && return 0 || return 1
+            fi
+            ;;
+    esac
+    
+    case $backup_choice in
+        2|3|4)
+            # Export ARM template
+            local arm_template_path="$BACKUP_DIR/$ARM_TEMPLATE_FILE"
+            print_info "Exporting ARM template to: $arm_template_path"
+            print_warning "This may take a few minutes for large resource groups..."
+            
+            # Get AKS resource ID first
+            local aks_resource_id=$(az aks show --resource-group "$resource_group" --name "$aks_name" --query id -o tsv 2>/dev/null)
+            
+            if [ -z "$aks_resource_id" ]; then
+                print_error "Failed to get AKS resource ID"
+                return 1
+            fi
+            
+            print_info "AKS Resource ID: $aks_resource_id"
+            
+            # Export entire resource group as ARM template
+            if az group export --resource-group "$resource_group" --resource-ids "$aks_resource_id" > "$arm_template_path" 2>/dev/null; then
+                print_success "ARM template exported successfully!"
+                print_info "ARM template saved to: $arm_template_path"
+                
+                local file_size=$(wc -c < "$arm_template_path" 2>/dev/null || echo "unknown")
+                print_info "File size: ${file_size} bytes"
+                
+                # Validate ARM template
+                print_info "Validating ARM template structure..."
+                if command -v jq &> /dev/null; then
+                    local resources_count=$(jq '.resources | length' "$arm_template_path" 2>/dev/null || echo "unknown")
+                    print_info "Resources in template: $resources_count"
+                fi
+                
+                success=true
+            else
+                print_error "Failed to export ARM template"
+                print_error "This could be due to:"
+                print_error "  - Large resource group (timeout)"
+                print_error "  - Insufficient permissions"
+                print_error "  - Complex resource dependencies"
+                [ -f "$arm_template_path" ] && rm -f "$arm_template_path"
+            fi
+            
+            if [ "$backup_choice" = "2" ] || [ "$backup_choice" = "4" ]; then
+                [ "$success" = true ] && return 0 || return 1
+            fi
+            ;;
+    esac
+    
+    # Complete backup - includes Kubernetes resources
+    if [ "$backup_choice" = "3" ]; then
+        print_header "Exporting Kubernetes Resources"
         
-        # Show file size for verification
-        local file_size=$(wc -c < "$backup_path" 2>/dev/null || echo "unknown")
-        print_info "Backup file size: ${file_size} bytes"
+        # Export all Kubernetes resources
+        local k8s_backup_path="$BACKUP_DIR/k8s-resources-$(date +%Y%m%d-%H%M%S).yaml"
+        print_info "Exporting all Kubernetes resources to: $k8s_backup_path"
+        
+        # Export cluster-wide resources
+        if kubectl get all --all-namespaces -o yaml > "$k8s_backup_path" 2>/dev/null; then
+            print_success "Basic Kubernetes resources exported!"
+            
+            # Export additional important resources
+            local additional_resources=("configmaps" "secrets" "persistentvolumes" "persistentvolumeclaims" "storageclass" "networkpolicies" "ingress")
+            
+            for resource in "${additional_resources[@]}"; do
+                print_info "Exporting $resource..."
+                {
+                    echo "---"
+                    echo "# $resource"
+                    kubectl get "$resource" --all-namespaces -o yaml 2>/dev/null || echo "# No $resource found"
+                } >> "$k8s_backup_path"
+            done
+            
+            # Export RBAC resources
+            print_info "Exporting RBAC resources..."
+            {
+                echo "---"
+                echo "# RBAC Resources"
+                kubectl get clusterroles,clusterrolebindings,roles,rolebindings --all-namespaces -o yaml 2>/dev/null || echo "# No RBAC resources found"
+            } >> "$k8s_backup_path"
+            
+            # Export Custom Resources
+            print_info "Exporting Custom Resource Definitions..."
+            {
+                echo "---"
+                echo "# Custom Resource Definitions"
+                kubectl get crd -o yaml 2>/dev/null || echo "# No CRDs found"
+            } >> "$k8s_backup_path"
+            
+            local k8s_file_size=$(wc -c < "$k8s_backup_path" 2>/dev/null || echo "unknown")
+            print_success "Kubernetes resources backup completed!"
+            print_info "K8s backup size: ${k8s_file_size} bytes"
+            success=true
+            
+        else
+            print_error "Failed to export Kubernetes resources"
+            print_warning "Continuing with partial backup..."
+        fi
+    fi
+    
+    case $backup_choice in
+        *)
+            if [ "$backup_choice" != "1" ] && [ "$backup_choice" != "2" ] && [ "$backup_choice" != "3" ] && [ "$backup_choice" != "4" ]; then
+                print_error "Invalid choice. Please select 1, 2, 3, or 4."
+                return 1
+            fi
+            ;;
+    esac
+    
+    if [ "$success" = true ]; then
+        print_header "Backup Summary"
+        print_success "Backup completed successfully!"
+        echo -e "\n${BLUE}Backup files:${NC}"
+        ls -la "$BACKUP_DIR"/*.json 2>/dev/null | tail -5
+        
+        echo -e "\n${YELLOW}Rollback capabilities:${NC}"
+        case $backup_choice in
+            1) echo "• ~70% rollback: AKS cluster configuration only" ;;
+            2) echo "• ~85% rollback: Infrastructure can be redeployed" ;;
+            3) echo "• ~95% rollback: Complete infrastructure + applications" ;;
+            4) echo "• ~85% rollback: Infrastructure backup (AKS + ARM)" ;;
+        esac
+        
+        echo -e "\n${YELLOW}Usage notes:${NC}"
+        echo "• AKS Config (JSON): Contains cluster configuration, good for reference"
+        echo "• ARM Template: Can be used to redeploy infrastructure with 'az deployment group create'"
+        if [ "$backup_choice" = "3" ]; then
+            echo "• Kubernetes Resources: Apply with 'kubectl apply -f k8s-resources-*.yaml'"
+            echo "• For complete restore: Deploy ARM template first, then apply K8s resources"
+        fi
         
         return 0
     else
-        print_error "Failed to export AKS configuration"
-        print_error "Please verify:"
-        print_error "  - Resource Group: $resource_group"
-        print_error "  - AKS cluster name: $aks_name"
-        print_error "  - Azure CLI permissions"
-        
-        # Remove empty file if created
-        [ -f "$backup_path" ] && rm -f "$backup_path"
+        print_error "Backup failed. Please check the error messages above."
+        print_error "Verify Resource Group: $resource_group"
+        print_error "Verify AKS cluster: $aks_name"
+        print_error "Check Azure CLI permissions"
         return 1
     fi
 }
